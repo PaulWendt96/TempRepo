@@ -1,0 +1,19 @@
+#!/bin/bash
+
+FILE=$1
+if test -f "$FILE"; then
+    if [[ $FILE == *.py ]]; then
+        FILENAME="${FILE%.*}"
+        FILENAME="$(basename -- $FILENAME)"
+        echo "$FILE exists and is a python file"
+        tmux new -s $FILENAME -d
+            tmux new-window -t '='$FILENAME -n pydebug
+            tmux split-window -t $FILENAME:pydebug
+            tmux send-keys -t '='$FILENAME':='pydebug.0 'vi '$FILE Enter
+            tmux send-keys -t '='$FILENAME':='pydebug.1 'python -m pdb '$FILE Enter
+    else
+        echo "$FILE exists but is not a python file"
+    fi
+else
+    echo "$FILE does not exist"
+fi
