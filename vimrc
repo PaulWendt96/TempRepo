@@ -10,5 +10,6 @@ map <F1> <Esc>:w<CR>:!clear;make check %<CR>
 
 nnoremap <silent> <space>l i<c-v>u03BB<Esc>
 vnoremap r :!dedent <bar> python3<CR>
+vnoremap p :!dedent <bar> pysend<CR>
 vnoremap < <gv
 vnoremap > >gv

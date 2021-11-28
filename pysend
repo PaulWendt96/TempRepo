@@ -1,0 +1,51 @@
+#!/usr/bin/env python3
+
+import curio
+import sys
+import socket, errno
+
+from curio import run, tcp_server
+
+'''
+ctrl+d to add EOF to stdin (if you're calling from command line)
+'''
+
+SOCKET = 2754
+
+def is_active(addr, sock):
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    
+    active = False
+    try:
+        s.bind(("localhost", sock))
+    except socket.error as e:
+        if e.errno == errno.EADDRINUSE:
+            active = True
+    
+    s.close()
+    return active
+
+
+async def main(buffer):
+    sock = await curio.open_connection('localhost', SOCKET)
+    async with sock:
+        stream = sock.as_stream()
+        await stream.write(buffer.encode('utf-8'))
+        response = b''
+        while True:
+            packet = await sock.recv(1024)
+            if not packet:
+                break
+            response += packet
+
+        response = response.decode('utf-8')
+        print(response)
+    
+
+if __name__ == '__main__':
+    if not is_active('localhost', SOCKET):
+        raise ValueError("Pyserver is not active (activate by running 'pyserve &')")
+    with sys.stdin as f:
+        buffer = f.read()
+    run(main, buffer)
+

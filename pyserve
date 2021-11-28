@@ -1,0 +1,62 @@
+#!/usr/bin/env python3
+
+import curio
+import os
+import textwrap
+
+from curio import run, run_in_process, TaskGroup, tcp_server, Queue, sleep
+from collections import namedtuple
+from contextlib import redirect_stdout
+from io import StringIO
+
+'''
+TODO:
+
+1. Make py_runner nonblocking (awaits cause issues because code objects
+   cannot easily be pickled)
+
+2. Make py_handler more elegant (specifically, stop relying on that hardcoded 
+   1M byte read)
+'''
+
+Message = namedtuple('Message', 'queue msg')
+messages = Queue()
+
+async def py_runner():
+    global_vars = globals()
+    while True:
+        q, msg = await messages.get()
+        msg = textwrap.dedent(msg)
+        tmp_stdout = StringIO()
+        with redirect_stdout(tmp_stdout):
+            try:
+                compiled = compile(msg, '<none>', 'exec')
+                exec(compiled, global_vars, global_vars)  # should be separate process
+            except BaseException as e:
+                print(e)
+        out = tmp_stdout.getvalue()
+        await q.put(out)
+
+async def py_handler(client, addr):
+    buffer = b''
+    async with client:
+        buffer = await client.recv(1000000)
+        message = buffer.decode('utf-8')
+        q = Queue()
+        msg = Message(q, message)
+        await messages.put(msg)
+        response = await q.get()
+        response = response.encode('utf-8')
+        await client.sendall(response)
+            
+
+async def py_server(host, port):
+    async with TaskGroup(wait=any) as g:
+        await g.spawn(py_runner)
+        await g.spawn(tcp_server, host, port, py_handler) 
+
+if __name__ == '__main__':
+    SOCK = 2754
+    pid = os.getpid()
+    print(f'running on port {SOCK} (pid == {pid})')
+    run(py_server, 'localhost', SOCK)
